@@ -133,21 +133,32 @@ def collect():
     print(f"전체 {len(APIS) * len(MONTHS)}개(유형×월) 중 남은 것 {len(todo)}개 "
           f"(1개 = 시군구 {len(codes)}곳 호출)")
 
+    # 하루 호출 한도는 API(주택유형)마다 따로 있다.
+    # 한 유형이 한도에 걸려도 다른 유형은 계속 받을 수 있도록, 한도에 걸린 유형만 기록해 두고 건너뛴다.
+    limited = set()
+
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         for i, (kind, ym) in enumerate(todo, 1):
+            if kind in limited:
+                continue
             t = time.time()
             try:
                 # 한 달치 256개 시군구를 8개씩 동시에 요청. map은 결과를 요청한 순서대로 돌려준다
                 results = list(pool.map(lambda c: fetch(kind, c, ym), codes))
             except DailyLimitError:
-                print("하루 호출 한도에 도달했습니다. 내일 다시 실행하면 이어서 받습니다.")
-                return False
+                print(f"  {kind}: 오늘 호출 한도 도달 → 이 유형은 내일 이어서 받음")
+                limited.add(kind)
+                continue
 
             df = pd.DataFrame([row for rows in results for row in rows])
             tmp = month_file(kind, ym).with_suffix(".tmp")
             df.to_csv(tmp, index=False, encoding="utf-8", compression="gzip")
             tmp.replace(month_file(kind, ym))  # 다 쓴 뒤에 이름 바꾸기 → 반쯤 쓰인 파일이 남지 않음
             print(f"  [{i}/{len(todo)}] {kind} {ym}: {len(df):,}건 ({time.time() - t:.0f}초)")
+
+    if limited:
+        print(f"한도 때문에 남은 유형: {', '.join(limited)} → 내일 다시 실행하면 이어서 받습니다.")
+        return False
     return True
 
 
