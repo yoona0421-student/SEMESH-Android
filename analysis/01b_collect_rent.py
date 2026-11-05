@@ -15,20 +15,26 @@
 
 [호출량]
   256곳 × 30개월 × 3종 ≈ 23,000번. API는 한 번에 한 지역·한 달만 줄 수 있어서 이렇게 많다.
-  개발계정은 하루 호출 수 제한이 있어서, 중간에 멈춰도 **다시 실행하면 이어서** 받도록 만들었다.
+
+[중간에 멈춰도 안전하게: '유형 × 월' 단위로 파일 하나씩 저장]
+  처음 버전은 모든 결과를 큰 압축파일 하나에 계속 이어 붙였다. 그런데 실행 중 프로그램이 갑자기 꺼지자
+  파일 끝이 깨지고, 어디까지 받았는지 기록과 실제 내용이 어긋났다(→ 다시 받으면 중복·누락 위험).
+  그래서 방식을 바꿨다.
+    1) 한 유형·한 달(256개 시군구)을 **전부 받은 뒤에야** 파일로 저장한다.
+    2) 임시 이름(.tmp)으로 다 쓴 다음 진짜 이름으로 바꾼다. → 파일이 '있으면 완전한 것', '없으면 안 받은 것'
+    3) 다시 실행하면 이미 있는 파일은 건너뛴다. → 같은 달을 두 번 저장할 일이 없어 **중복이 생기지 않는다**.
+  꺼지는 순간 받고 있던 달 하나만 처음부터 다시 받으면 된다.
 
 실행: analysis 폴더에서  python 01b_collect_rent.py
 결과:
-  data/raw/molit_rent/  ← 계약 한 건 한 건(원본 행). 용량이 커서 GitHub에는 올리지 않음
+  data/raw/molit_rent/{유형}_{년월}.csv.gz  ← 계약 한 건 한 건(원본 행). 용량이 커서 GitHub에는 올리지 않음
   data/processed/rent_sigungu_2023_2025.csv ← 시군구별로 집계한 표 (이걸 분석에 사용)
 """
 
 import os
 import time
-import csv
-import gzip
 import xml.etree.ElementTree as ET            # API 응답(XML)을 읽는 표준 라이브러리
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pandas as pd
@@ -41,7 +47,6 @@ API_KEY = os.getenv("DATA_GO_KR_API_KEY", "").strip()
 
 CACHE = BASE / "data" / "raw" / "molit_rent"   # 원본 행 저장 폴더 (.gitignore 처리)
 CACHE.mkdir(parents=True, exist_ok=True)
-DONE_LOG = CACHE / "_done.csv"                 # 어떤 (유형, 지역, 월)을 이미 받았는지 기록 → 이어받기용
 OUT = BASE / "data" / "processed" / "rent_sigungu_2023_2025.csv"
 
 # 주택유형별 API 주소. 응답 항목 이름이 유형마다 조금씩 달라서 면적 항목 이름도 같이 적어둔다.
@@ -52,12 +57,10 @@ APIS = {
 }
 URL = "https://apis.data.go.kr/1613000/"
 ROWS_PER_PAGE = 1000                           # 한 번에 받을 최대 행 수 (많을수록 호출 수가 줄어듦)
-WORKERS = 8                                    # 동시에 보내는 요청 수. 4개일 때 약 3.5시간 → 8개로 늘림 (더 늘리면 서버에 부담)
+WORKERS = 8                                    # 동시에 보내는 요청 수 (더 늘리면 서버에 부담)
 
 # 2023-07 ~ 2025-12 → ['202307', '202308', ..., '202512']
 MONTHS = [d.strftime("%Y%m") for d in pd.date_range("2023-07-01", "2025-12-01", freq="MS")]
-
-FIELDS = ["유형", "지역코드", "계약년월", "법정동", "보증금", "월세", "면적", "건축년도", "계약구분"]
 
 
 class DailyLimitError(Exception):
@@ -114,11 +117,8 @@ def fetch(kind, code, ym):
         page += 1
 
 
-def load_done():
-    if not DONE_LOG.exists():
-        return set()
-    done = pd.read_csv(DONE_LOG, dtype=str)
-    return set(zip(done["유형"], done["지역코드"], done["계약년월"]))
+def month_file(kind, ym):
+    return CACHE / f"{kind}_{ym}.csv.gz"
 
 
 def collect():
@@ -127,53 +127,34 @@ def collect():
 
     codes = pd.read_csv(BASE / "data" / "processed" / "accident_2026_08.csv",
                         dtype={"지역코드": str})["지역코드"].tolist()
-    done = load_done()
-    todo = [(k, c, m) for k in APIS for c in codes for m in MONTHS if (k, c, m) not in done]
-    print(f"전체 {len(APIS) * len(codes) * len(MONTHS)}건 중 남은 작업 {len(todo)}건")
-    if not todo:
-        return True
 
-    new_log = not DONE_LOG.exists()
-    with open(DONE_LOG, "a", newline="", encoding="utf-8") as log_f:
-        log = csv.writer(log_f)
-        if new_log:
-            log.writerow(["유형", "지역코드", "계약년월", "행수"])
-        # 유형별로 gzip(압축) 파일 하나에 계속 이어 붙인다. 원본 행이 수백만 개라 압축해야 용량이 줄어듦
-        files = {k: gzip.open(CACHE / f"{k}.csv.gz", "at", newline="", encoding="utf-8") for k in APIS}
-        writers = {k: csv.DictWriter(f, fieldnames=FIELDS) for k, f in files.items()}
-        for k, f in files.items():
-            if f.tell() == 0:
-                writers[k].writeheader()
+    # 이미 파일이 있는 (유형, 월)은 건너뛴다 → 이어받기 + 중복 방지
+    todo = [(k, m) for k in APIS for m in MONTHS if not month_file(k, m).exists()]
+    print(f"전체 {len(APIS) * len(MONTHS)}개(유형×월) 중 남은 것 {len(todo)}개 "
+          f"(1개 = 시군구 {len(codes)}곳 호출)")
 
-        finished = 0
-        try:
-            with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-                futures = {pool.submit(fetch, *job): job for job in todo}
-                for fut in as_completed(futures):
-                    kind, code, ym = futures[fut]
-                    rows = fut.result()            # 여기서 오류가 나면 아래 except로
-                    writers[kind].writerows(rows)  # 파일 쓰기는 한 곳(메인)에서만 → 내용이 섞이지 않음
-                    log.writerow([kind, code, ym, len(rows)])
-                    finished += 1
-                    if finished % 500 == 0:
-                        log_f.flush()
-                        print(f"  {finished}/{len(todo)} 완료")
-        except DailyLimitError:
-            print("하루 호출 한도에 도달했습니다. 내일 다시 실행하면 이어서 받습니다.")
-            for f in futures:
-                f.cancel()
-            return False
-        finally:
-            for f in files.values():
-                f.close()
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for i, (kind, ym) in enumerate(todo, 1):
+            t = time.time()
+            try:
+                # 한 달치 256개 시군구를 8개씩 동시에 요청. map은 결과를 요청한 순서대로 돌려준다
+                results = list(pool.map(lambda c: fetch(kind, c, ym), codes))
+            except DailyLimitError:
+                print("하루 호출 한도에 도달했습니다. 내일 다시 실행하면 이어서 받습니다.")
+                return False
+
+            df = pd.DataFrame([row for rows in results for row in rows])
+            tmp = month_file(kind, ym).with_suffix(".tmp")
+            df.to_csv(tmp, index=False, encoding="utf-8", compression="gzip")
+            tmp.replace(month_file(kind, ym))  # 다 쓴 뒤에 이름 바꾸기 → 반쯤 쓰인 파일이 남지 않음
+            print(f"  [{i}/{len(todo)}] {kind} {ym}: {len(df):,}건 ({time.time() - t:.0f}초)")
     return True
 
 
 def summarize():
     """원본 행 → 시군구별 집계표. 전세 = 월세가 0인 계약"""
-    df = pd.concat([pd.read_csv(CACHE / f"{k}.csv.gz", dtype={"지역코드": str}) for k in APIS],
-                   ignore_index=True)
-    df = df.drop_duplicates()                  # 이어받기 중 같은 행이 두 번 들어갔을 경우 대비
+    df = pd.concat([pd.read_csv(month_file(k, m), dtype={"지역코드": str})
+                    for k in APIS for m in MONTHS], ignore_index=True)
     df["전세"] = df["월세"].fillna(0) == 0
 
     jeonse = df[df["전세"]]
