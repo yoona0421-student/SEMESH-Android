@@ -17,7 +17,7 @@ HUG 최신 데이터로 다시 분석하고 Android(Kotlin) 앱으로 옮긴 프
 | `analysis/output/` | 앱에 넣을 결과물 (`region.csv`, `map.html`, 그래프) |
 | `android/` | Android Studio 프로젝트 (Empty Views Activity, Kotlin) |
 | `paper/` | 논문 원고와 그림 |
-| `docs/` | 발표자료, 진행 기록 |
+| `docs/` | 발표자료, 진행 기록, [위험등급 방법론](docs/03_위험등급_방법론.md) |
 
 ## 앱 구성
 
