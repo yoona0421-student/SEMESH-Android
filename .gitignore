@@ -15,6 +15,9 @@ android/captures/
 *.aab
 *.iml
 
+# ── API 키 (절대 올리지 않기) ──
+.env
+
 # ── 기타 ──
 .DS_Store
 Thumbs.db

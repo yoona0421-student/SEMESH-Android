@@ -11,6 +11,7 @@ HUG 최신 데이터로 다시 분석하고 Android(Kotlin) 앱으로 옮긴 프
 | 폴더 | 내용 |
 |---|---|
 | `analysis/` | Python 데이터 분석 (HUG 데이터 → 시군구 위험등급 → `region.csv`, `map.html`) |
+| `analysis/notebooks/` | 같은 분석을 셀 단위로 나눠 중간 결과·그래프를 보는 Jupyter 노트북 (VS Code에서 열기) |
 | `analysis/data/raw/` | 내려받은 원본 데이터 (수정하지 않음) |
 | `analysis/data/processed/` | 전처리 결과 |
 | `analysis/output/` | 앱에 넣을 결과물 (`region.csv`, `map.html`, 그래프) |

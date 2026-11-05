@@ -1,0 +1,9 @@
+# 분석에 필요한 라이브러리 — 설치: python -m pip install -r requirements.txt
+pandas
+openpyxl        # pandas가 .xlsx 파일을 읽을 때 사용
+matplotlib      # 그래프
+folium          # 지도(map.html)
+requests        # 공공데이터 API 호출 (전월세 실거래가)
+python-dotenv   # .env 파일에서 API 키 읽기
+jupyter         # 노트북
+ipykernel       # VS Code에서 노트북 실행
