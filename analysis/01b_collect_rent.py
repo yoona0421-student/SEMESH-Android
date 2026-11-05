@@ -62,6 +62,55 @@ WORKERS = 8                                    # 동시에 보내는 요청 수 
 # 2023-07 ~ 2025-12 → ['202307', '202308', ..., '202512']
 MONTHS = [d.strftime("%Y%m") for d in pd.date_range("2023-07-01", "2025-12-01", freq="MS")]
 
+# ── 2026년 7월 행정구역 개편 대응 ────────────────────────────
+# HUG 파일(보증사고·피해주택)은 '옛 지역코드'를 쓰는데, 국토부 API는 과거 거래도 '새 지역코드'로만 준다.
+# 그래서 옛 코드로 요청하면 0건이 나온다. → 새 코드로 받은 뒤, 지역코드를 옛 코드로 되돌려 적는다.
+#   - 광주광역시(29xxx)·전라남도(46xxx) → 전남광주통합특별시(12xxx): 이름이 같은 지역끼리 1:1
+#   - 인천 서구(28260)  → 서해구(28275) + 검단구(28290)        : 둘을 합치면 옛 서구
+#   - 인천 중구(28110)  → 영종구(28155) 전체 + 제물포구(28125) 일부
+#   - 인천 동구(28140)  → 제물포구(28125) 일부                   : 제물포구는 '동 이름'으로 옛 중구/동구를 나눈다
+# 근거: 국토교통부 법정동코드(data/raw/국토교통부_법정동코드_20260929.csv)
+OLD_DONGGU_DONGS = {"만석동", "화수동", "송현동", "화평동", "창영동", "금곡동", "송림동"}  # 옛 인천 동구의 법정동
+INCHEON_ALIAS = {"28110": ["28155", "28125"], "28140": ["28125"], "28260": ["28275", "28290"]}
+EMPTY_CODES = {"41590"}   # 경기 화성시: 2026년 구 4개로 나뉘어 거래는 구 코드로만 나옴 → 시 코드 자체는 요청하지 않음
+
+
+def build_alias():
+    """옛 코드 → [새 코드들] 대응표. 광주·전남은 법정동코드 표에서 이름으로 자동 매칭"""
+    table = pd.read_csv(BASE / "data" / "raw" / "국토교통부_법정동코드_20260929.csv",
+                        encoding="cp949", dtype=str)
+    sgg = table[table["법정동코드"].str[5:] == "00000"].copy()
+    sgg["코드5"] = sgg["법정동코드"].str[:5]
+    sgg["이름"] = sgg["법정동명"].str.split(" ", n=1).str[1]           # '광주광역시 동구' → '동구'
+    new = sgg[sgg["법정동명"].str.startswith("전남광주통합특별시 ")].set_index("이름")["코드5"]
+    old = sgg[sgg["법정동명"].str.match(r"^(광주광역시|전라남도) ") & (sgg["폐지여부"] == "폐지")]
+
+    alias = dict(INCHEON_ALIAS)
+    for r in old.itertuples():
+        if r.이름 in new.index:
+            alias[r.코드5] = [new[r.이름]]
+    return alias
+
+
+ALIAS = build_alias()
+
+
+def fetch_alias(kind, old_code, ym):
+    """개편 지역: 새 코드로 받아서 지역코드를 옛 코드로 바꿔 돌려준다."""
+    rows = []
+    for new_code in ALIAS[old_code]:
+        for row in fetch(kind, new_code, ym):
+            if new_code == "28125":          # 제물포구는 옛 중구와 옛 동구가 섞여 있음 → 동 이름으로 나눔
+                belongs_to = "28140" if row["법정동"] in OLD_DONGGU_DONGS else "28110"
+                if belongs_to != old_code:
+                    continue
+            row["지역코드"] = old_code
+            rows.append(row)
+    return rows
+
+
+FIELDS = ["유형", "지역코드", "계약년월", "법정동", "보증금", "월세", "면적", "건축년도", "계약구분"]
+
 
 class DailyLimitError(Exception):
     """하루 호출 한도를 넘었을 때 → 오늘은 그만 받고 내일 다시 실행"""
@@ -117,44 +166,54 @@ def fetch(kind, code, ym):
         page += 1
 
 
-def month_file(kind, ym):
-    return CACHE / f"{kind}_{ym}.csv.gz"
+def month_file(kind, ym, part=""):
+    """part='' → 일반 지역 파일, part='alias' → 행정구역 개편 지역(새 코드로 받은 것) 파일"""
+    return CACHE / (f"{kind}_{ym}.csv.gz" if not part else f"{kind}_{ym}_{part}.csv.gz")
 
 
 def collect():
     if not API_KEY:
         raise SystemExit(".env 파일에 DATA_GO_KR_API_KEY가 없습니다. (.env.example 참고)")
 
-    codes = pd.read_csv(BASE / "data" / "processed" / "accident_2026_08.csv",
-                        dtype={"지역코드": str})["지역코드"].tolist()
+    all_codes = pd.read_csv(BASE / "data" / "processed" / "accident_2026_08.csv",
+                            dtype={"지역코드": str})["지역코드"].tolist()
+    # 일반 지역과 개편 지역을 나눠서 받는다. 개편 지역은 따로 '_alias' 파일에 저장
+    # (일반 파일은 개편 지역을 옛 코드로 요청해 0건이었으므로, 두 파일을 합쳐도 같은 지역이 두 번 들어가지 않음)
+    plain = [c for c in all_codes if c not in ALIAS and c not in EMPTY_CODES]
+    alias_codes = [c for c in all_codes if c in ALIAS]
 
+    jobs = ([(k, m, "", plain) for k in APIS for m in MONTHS] +
+            [(k, m, "alias", alias_codes) for k in APIS for m in MONTHS])
     # 이미 파일이 있는 (유형, 월)은 건너뛴다 → 이어받기 + 중복 방지
-    todo = [(k, m) for k in APIS for m in MONTHS if not month_file(k, m).exists()]
-    print(f"전체 {len(APIS) * len(MONTHS)}개(유형×월) 중 남은 것 {len(todo)}개 "
-          f"(1개 = 시군구 {len(codes)}곳 호출)")
+    todo = [j for j in jobs if not month_file(j[0], j[1], j[2]).exists()]
+    print(f"전체 {len(jobs)}개 중 남은 것 {len(todo)}개 "
+          f"(일반 지역 {len(plain)}곳, 개편 지역 {len(alias_codes)}곳)")
 
     # 하루 호출 한도는 API(주택유형)마다 따로 있다.
     # 한 유형이 한도에 걸려도 다른 유형은 계속 받을 수 있도록, 한도에 걸린 유형만 기록해 두고 건너뛴다.
     limited = set()
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        for i, (kind, ym) in enumerate(todo, 1):
+        for i, (kind, ym, part, codes) in enumerate(todo, 1):
             if kind in limited:
                 continue
             t = time.time()
+            get = fetch_alias if part == "alias" else fetch
             try:
-                # 한 달치 256개 시군구를 8개씩 동시에 요청. map은 결과를 요청한 순서대로 돌려준다
-                results = list(pool.map(lambda c: fetch(kind, c, ym), codes))
+                # 한 달치 시군구들을 8개씩 동시에 요청. map은 결과를 요청한 순서대로 돌려준다
+                results = list(pool.map(lambda c: get(kind, c, ym), codes))
             except DailyLimitError:
                 print(f"  {kind}: 오늘 호출 한도 도달 → 이 유형은 내일 이어서 받음")
                 limited.add(kind)
                 continue
 
-            df = pd.DataFrame([row for rows in results for row in rows])
-            tmp = month_file(kind, ym).with_suffix(".tmp")
+            df = pd.DataFrame([row for rows in results for row in rows], columns=FIELDS)
+            target = month_file(kind, ym, part)
+            tmp = target.with_suffix(".tmp")
             df.to_csv(tmp, index=False, encoding="utf-8", compression="gzip")
-            tmp.replace(month_file(kind, ym))  # 다 쓴 뒤에 이름 바꾸기 → 반쯤 쓰인 파일이 남지 않음
-            print(f"  [{i}/{len(todo)}] {kind} {ym}: {len(df):,}건 ({time.time() - t:.0f}초)")
+            tmp.replace(target)                # 다 쓴 뒤에 이름 바꾸기 → 반쯤 쓰인 파일이 남지 않음
+            print(f"  [{i}/{len(todo)}] {kind} {ym}{' (개편지역)' if part else ''}: "
+                  f"{len(df):,}건 ({time.time() - t:.0f}초)")
 
     if limited:
         print(f"한도 때문에 남은 유형: {', '.join(limited)} → 내일 다시 실행하면 이어서 받습니다.")
@@ -164,8 +223,8 @@ def collect():
 
 def summarize():
     """원본 행 → 시군구별 집계표. 전세 = 월세가 0인 계약"""
-    df = pd.concat([pd.read_csv(month_file(k, m), dtype={"지역코드": str})
-                    for k in APIS for m in MONTHS], ignore_index=True)
+    df = pd.concat([pd.read_csv(month_file(k, m, part), dtype={"지역코드": str})
+                    for k in APIS for m in MONTHS for part in ("", "alias")], ignore_index=True)
     df["전세"] = df["월세"].fillna(0) == 0
 
     jeonse = df[df["전세"]]
