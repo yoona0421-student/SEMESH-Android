@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 지도 화면: 위쪽 안내 문구 + 아래 전체를 WebView로 채움.
+     WebView에는 Python(Folium)으로 만든 map.html을 띄운다. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical"
+    tools:context=".MapActivity">
+
+    <TextView
+        android:id="@+id/tvMapInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="12dp"
+        android:text="지역을 터치하면 피해 건수와 등급이 보여요"
+        android:textSize="14sp" />
+
+    <!-- layout_height=0dp + layout_weight=1 : 남은 공간을 WebView가 전부 차지 -->
+    <WebView
+        android:id="@+id/webMap"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <Button
+        android:id="@+id/btnMapBack"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/btn_back" />
+</LinearLayout>

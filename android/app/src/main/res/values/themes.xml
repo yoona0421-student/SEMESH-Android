@@ -1,0 +1,8 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- 앱 전체 테마. 수업 예제는 NoActionBar였지만, 화면마다 제목(title)을 보여주려고 ActionBar가 있는 테마(Material3.DayNight)를 씀 -->
+    <style name="Base.Theme.SEMESH" parent="Theme.Material3.DayNight">
+        <!-- 디자인 단계에서 색을 여기에 정함 (예: colorPrimary) -->
+    </style>
+
+    <style name="Theme.SEMESH" parent="Base.Theme.SEMESH" />
+</resources>

@@ -1,0 +1,5 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- 다크 모드 테마 (지금은 기본값 그대로) -->
+    <style name="Base.Theme.SEMESH" parent="Theme.Material3.DayNight">
+    </style>
+</resources>

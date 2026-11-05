@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 안전 진단 화면 (4단계)
+     한 화면 안에 단계별 묶음(LinearLayout) 4개를 만들어 두고,
+     지금 단계만 VISIBLE, 나머지는 GONE으로 숨기는 방식.
+     (화면을 4개 따로 만드는 것보다 입력값을 넘기기 쉬움) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical"
+    android:padding="20dp"
+    tools:context=".DiagnosisActivity">
+
+    <!-- 진행 상태: "1 / 4 기본 정보" -->
+    <TextView
+        android:id="@+id/tvStep"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="1 / 4  기본 정보"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <ProgressBar
+        android:id="@+id/pbStep"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:max="4"
+        android:progress="1" />
+
+    <!-- 단계 내용이 길어질 수 있으므로 스크롤 가능하게 -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="16dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- ========== 1단계: 기본 정보 ========== -->
+            <LinearLayout
+                android:id="@+id/step1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="주택 유형" />
+
+                <RadioGroup
+                    android:id="@+id/rgHouseType"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <RadioButton
+                        android:id="@+id/rdoVilla"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="연립·다세대(빌라)" />
+
+                    <RadioButton
+                        android:id="@+id/rdoOfficetel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="오피스텔" />
+
+                    <RadioButton
+                        android:id="@+id/rdoHouse"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="단독·다가구" />
+
+                    <RadioButton
+                        android:id="@+id/rdoApt"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="아파트" />
+                </RadioGroup>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="전세 보증금 (만원)" />
+
+                <EditText
+                    android:id="@+id/edtDeposit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="예: 20000"
+                    android:inputType="number" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="집 매매 시세 (만원)" />
+
+                <EditText
+                    android:id="@+id/edtPrice"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="예: 25000"
+                    android:inputType="number" />
+            </LinearLayout>
+
+            <!-- ========== 2단계: 자가 점검 (계약 전 서류 확인) ========== -->
+            <LinearLayout
+                android:id="@+id/step2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="확인한 항목에 체크하세요" />
+
+                <CheckBox
+                    android:id="@+id/chkRegistry"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="등기부등본에서 근저당·압류를 확인했다" />
+
+                <CheckBox
+                    android:id="@+id/chkOwner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="등기부의 소유자와 계약할 집주인이 같다" />
+
+                <CheckBox
+                    android:id="@+id/chkTax"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="집주인의 세금 체납 여부를 확인했다" />
+
+                <CheckBox
+                    android:id="@+id/chkInsurance"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="전세보증금반환보증 가입이 가능하다" />
+            </LinearLayout>
+
+            <!-- ========== 3단계: 계약서 체크 ========== -->
+            <LinearLayout
+                android:id="@+id/step3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="계약할 때 확인한 항목에 체크하세요" />
+
+                <CheckBox
+                    android:id="@+id/chkAgent"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="공인중개사 등록 여부를 확인했다" />
+
+                <CheckBox
+                    android:id="@+id/chkAccount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="계약금을 집주인 본인 계좌로 보낸다" />
+
+                <CheckBox
+                    android:id="@+id/chkSpecial"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="특약(보증보험 불가 시 계약 해제 등)을 넣었다" />
+
+                <CheckBox
+                    android:id="@+id/chkMoveIn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="잔금 당일 전입신고·확정일자를 받을 수 있다" />
+            </LinearLayout>
+
+            <!-- ========== 4단계: 결과 ========== -->
+            <LinearLayout
+                android:id="@+id/step4"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tvResultTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="진단 결과"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvResult"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textSize="16sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- 아래쪽 [이전] [다음] 버튼: 가로로 반씩 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnPrev"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/btn_prev" />
+
+        <Button
+            android:id="@+id/btnNext"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="@string/btn_next" />
+    </LinearLayout>
+</LinearLayout>

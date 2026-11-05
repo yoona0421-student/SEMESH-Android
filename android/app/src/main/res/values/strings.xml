@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">SEMESH</string>
+
+    <!-- 화면 제목 (ActionBar에 표시) -->
+    <string name="title_main">SEMESH 전세사기 위험 지도</string>
+    <string name="title_map">지역별 위험등급 지도</string>
+    <string name="title_diagnosis">전세 안전 진단</string>
+    <string name="title_guide">전세사기 예방 가이드</string>
+
+    <!-- 메인 화면 -->
+    <string name="main_location_label">내 위치</string>
+    <string name="main_location_none">아직 위치를 확인하지 않았어요</string>
+    <string name="main_btn_location">내 위치로 확인하기</string>
+    <string name="main_card_title">우리 동네 위험도</string>
+    <string name="main_btn_map">지도에서 보기</string>
+    <string name="main_btn_diagnosis">안전 진단 하기</string>
+    <string name="main_btn_guide">예방 가이드</string>
+
+    <!-- 공통 버튼 -->
+    <string name="btn_back">뒤로</string>
+    <string name="btn_prev">이전</string>
+    <string name="btn_next">다음</string>
+    <string name="btn_restart">처음부터 다시</string>
+    <string name="btn_home">홈으로</string>
+</resources>

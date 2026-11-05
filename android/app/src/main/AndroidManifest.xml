@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 지도(WebView)의 배경 지도 타일을 인터넷에서 받아오기 때문에 필요 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 3주차: GPS로 내 위치를 받을 때 사용 (지금은 선언만 해 둠) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SEMESH">
+
+        <!-- 첫 화면: 앱을 켜면 가장 먼저 보이는 화면 (LAUNCHER) -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 화면이 추가되면 여기에 꼭 등록해야 한다 (등록 안 하면 화면 이동 시 앱이 꺼짐) -->
+        <activity android:name=".MapActivity" />
+        <activity android:name=".DiagnosisActivity" />
+        <activity android:name=".GuideActivity" />
+    </application>
+
+</manifest>
