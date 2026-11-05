@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 가이드 화면: 주제 버튼 3개. 버튼을 누르면 대화상자(AlertDialog)로 내용을 보여준다. -->
+<!-- 가이드 메뉴 화면.
+     주제 버튼은 GuideData.kt에 있는 주제 수만큼 코드(GuideActivity)에서 만들어 menuContainer에 넣는다.
+     → 주제를 추가해도 이 XML은 고칠 필요가 없다. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -12,38 +14,22 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="알고 싶은 내용을 눌러 보세요"
+        android:text="공식 기관 자료를 한 곳에 모았어요.\n알고 싶은 내용을 눌러 보세요."
         android:textSize="16sp" />
 
-    <Button
-        android:id="@+id/btnTypes"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="전세사기 유형"
-        android:textSize="18sp" />
-
-    <Button
-        android:id="@+id/btnSteps"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="계약 전 4단계 점검"
-        android:textSize="18sp" />
-
-    <Button
-        android:id="@+id/btnSupport"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="피해 시 법률·금융 지원"
-        android:textSize="18sp" />
-
-    <!-- 남은 공간을 비워서 [뒤로] 버튼을 맨 아래로 밀어냄 -->
-    <View
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_marginTop="8dp"
+        android:layout_weight="1">
+
+        <!-- 여기에 주제 버튼이 차례로 추가된다 -->
+        <LinearLayout
+            android:id="@+id/menuContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
 
     <Button
         android:id="@+id/btnGuideBack"

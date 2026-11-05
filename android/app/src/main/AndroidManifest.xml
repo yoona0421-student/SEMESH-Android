@@ -32,6 +32,18 @@
         <activity android:name=".MapActivity" />
         <activity android:name=".DiagnosisActivity" />
         <activity android:name=".GuideActivity" />
+        <activity android:name=".GuideDetailActivity" />
     </application>
+
+    <!-- Android 11+에서 전화 앱·브라우저를 Intent로 열 때 "이런 앱이 있는지" 확인할 수 있게 선언 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
 
 </manifest>
