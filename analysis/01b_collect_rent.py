@@ -129,14 +129,18 @@ def fetch(kind, code, ym):
     while True:
         params = {"serviceKey": API_KEY, "LAWD_CD": code, "DEAL_YMD": ym,
                   "numOfRows": ROWS_PER_PAGE, "pageNo": page}
-        for attempt in range(3):               # 네트워크가 잠깐 끊겨도 3번까지 다시 시도
+        # 네트워크가 잠깐 끊기거나 서버가 오류(5xx)를 주면 기다렸다가 다시 시도한다.
+        # 처음엔 3번(2·4·6초)만 시도했더니 서버가 잠시 느려진 순간에 수집 전체가 멈췄다 → 6번, 최대 약 1분까지 기다림
+        for attempt in range(6):
             try:
                 r = requests.get(URL + path, params=params, timeout=30)
+                if r.status_code >= 500:
+                    raise requests.RequestException(f"서버 오류 {r.status_code}")
                 break
             except requests.RequestException:
-                time.sleep(2 * (attempt + 1))
+                time.sleep(min(2 ** attempt * 2, 60))   # 2, 4, 8, 16, 32, 60초
         else:
-            raise RuntimeError(f"{kind} {code} {ym}: 네트워크 오류 3회")
+            raise RuntimeError(f"{kind} {code} {ym}: 네트워크 오류 6회")
 
         text = r.content.decode("utf-8", "replace")
         if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in text or "<resultCode>22</resultCode>" in text:
