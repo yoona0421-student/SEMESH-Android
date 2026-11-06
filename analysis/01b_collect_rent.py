@@ -10,8 +10,10 @@
 [수집 범위]
   - 지역: 01단계 보증사고 파일의 시군구 256곳 (지역코드 5자리 = API의 LAWD_CD와 같은 코드)
   - 기간: 2023년 7월 ~ 2025년 12월 (30개월) ← 피해주택 데이터의 기간과 맞춤
-  - 주택유형: 연립다세대 · 단독다가구 · 오피스텔 (아파트는 전세사기 피해가 적고 데이터가 매우 커서 제외)
-    → 전세사기 피해주택의 대부분이 빌라(연립다세대)·다가구·오피스텔이라는 점이 근거 (논문에 출처와 함께 쓸 것)
+  - 주택유형: 연립다세대 · 단독다가구 · 오피스텔 · 아파트
+    → 처음에는 아파트를 뺐다(피해가 빌라·다가구·오피스텔에 몰려 있고 데이터가 커서).
+      그런데 분자인 HUG 보증사고·피해주택에는 아파트도 포함되어 있어서, 분모에서 아파트를 빼면
+      아파트가 많은 도시(거제·사천·포항 등)의 비율이 부풀려졌다(1차 결과에서 확인). → 아파트도 분모에 넣는다.
 
 [호출량]
   256곳 × 30개월 × 3종 ≈ 23,000번. API는 한 번에 한 지역·한 달만 줄 수 있어서 이렇게 많다.
@@ -54,9 +56,10 @@ APIS = {
     "연립다세대": ("RTMSDataSvcRHRent/getRTMSDataSvcRHRent", "excluUseAr"),   # 전용면적
     "단독다가구": ("RTMSDataSvcSHRent/getRTMSDataSvcSHRent", "totalFloorAr"), # 연면적
     "오피스텔": ("RTMSDataSvcOffiRent/getRTMSDataSvcOffiRent", "excluUseAr"),
+    "아파트": ("RTMSDataSvcAptRent/getRTMSDataSvcAptRent", "excluUseAr"),
 }
 URL = "https://apis.data.go.kr/1613000/"
-ROWS_PER_PAGE = 1000                           # 한 번에 받을 최대 행 수 (많을수록 호출 수가 줄어듦)
+ROWS_PER_PAGE = 5000                           # 한 번에 받을 최대 행 수. 처음엔 1000 → 5000도 된다는 걸 확인해 호출 수를 줄임
 WORKERS = 8                                    # 동시에 보내는 요청 수 (더 늘리면 서버에 부담)
 
 # 2023-07 ~ 2025-12 → ['202307', '202308', ..., '202512']
@@ -242,6 +245,8 @@ def summarize():
                                 aggfunc="size", fill_value=0).add_prefix("전세_")
     out = pd.concat([g_all, g_j, g_type], axis=1).fillna(0).reset_index()
     out["전세비율"] = out["전세계약수"] / out["임대차계약수"]
+    # 참고용: 아파트를 뺀 전세 계약 수 (1차 결과와 비교할 때 사용)
+    out["전세계약수_비아파트"] = out["전세계약수"] - out.get("전세_아파트", 0)
     out.to_csv(OUT, index=False, encoding="utf-8-sig")
     print(f"집계 저장 → {OUT}  (시군구 {len(out)}곳, 전세 계약 {int(out['전세계약수'].sum()):,}건)")
 
