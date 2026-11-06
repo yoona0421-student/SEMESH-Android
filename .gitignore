@@ -20,6 +20,7 @@ android/captures/
 
 # ── 용량이 큰 원본 (스크립트로 다시 받을 수 있음) ──
 analysis/data/raw/molit_rent/
+analysis/data/raw/geo/
 
 # ── 기타 ──
 .DS_Store
