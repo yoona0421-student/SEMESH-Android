@@ -22,6 +22,7 @@
 결과: output/sigungu.geojson (단순화된 경계), output/map.html (앱에 넣을 지도)
 """
 
+import importlib
 import json
 from pathlib import Path
 
@@ -34,6 +35,9 @@ GEO_SRC = BASE / "data" / "raw" / "geo" / "HangJeongDong_ver20260401.geojson"
 OUT = BASE / "output"
 
 SIMPLIFY_M = 300            # 단순화 허용 오차(미터). 클수록 파일이 작아지지만 경계가 거칠어진다
+SIMPLIFY_DONG_M = 30        # 서울 동은 작아서 더 정밀하게 (300m로 하면 작은 동이 사라진다)
+DONG_ZOOM = 11              # 이 확대 수준부터 서울 동 단위 색칠을 보여 준다
+GRAY = "#BDBDBD"            # 전세 계약도 피해도 없어 판단할 수 없는 동
 COLORS = {"고위험": "#D64541", "주의": "#F2B134", "안전": "#3FA66B"}
 ATTR = ('경계: 통계청 SGIS(공공누리 1유형) 가공 '
         '<a href="https://github.com/vuski/admdongkor">vuski/admdongkor</a> · '
@@ -51,6 +55,42 @@ def build_boundaries():
     sgg["geometry"] = sgg.simplify(SIMPLIFY_M, preserve_topology=True)
     sgg = sgg.to_crs(4326)
     return sgg.rename(columns={"sgg": "지역코드"})
+
+
+def build_seoul_dong():
+    """서울 행정동 경계 → 05단계와 같은 '동 그룹'으로 합치고 등급 붙이기
+
+    05단계에서 행정동을 법정동 기준 동 그룹으로 묶었으므로(화곡1~8동 → 화곡동),
+    지도에서도 같은 함수(to_group)로 행정동 도형을 묶어야 색과 숫자가 맞는다.
+    파일 이름이 숫자로 시작해서 'import 05_seoul_dong'은 문법 오류 → importlib로 불러온다."""
+    to_group = importlib.import_module("05_seoul_dong").to_group
+
+    dong = gpd.read_file(GEO_SRC)
+    dong = dong[dong["sido"] == "11"].copy()
+    dong["행정동"] = dong["adm_nm"].str.split().str[-1]          # '서울특별시 강서구 화곡1동' → '화곡1동'
+    dong["동그룹"] = [to_group(g, d) for g, d in zip(dong["sggnm"], dong["행정동"])]
+    grp = dong.dissolve(by=["sgg", "동그룹"], as_index=False)[["sgg", "sggnm", "동그룹", "geometry"]]
+
+    grp = grp.to_crs(5179)
+    grp["geometry"] = grp.simplify(SIMPLIFY_DONG_M, preserve_topology=True)
+    grp = grp.to_crs(4326).rename(columns={"sgg": "지역코드"})
+
+    risk = pd.read_csv(OUT / "seoul_dong.csv", dtype={"지역코드": str})
+    grp = grp.merge(risk.drop(columns=["시군구"]), on=["지역코드", "동그룹"], how="left")
+
+    # 경계는 있는데 05단계 표에 없는 동 = 전세 계약도 피해도 0건 (예: 중구 명동·소공동, 상업지역)
+    no_data = grp["등급"].isna()
+    print(f"서울 동 그룹 경계 {len(grp)}개, 그중 계약·피해 자료 없음 {no_data.sum()}개: "
+          f"{', '.join(grp.loc[no_data, 'sggnm'] + ' ' + grp.loc[no_data, '동그룹'])}")
+    grp["등급"] = grp["등급"].fillna("자료없음")
+
+    grp["이름"] = grp["sggnm"] + " " + grp["동그룹"]
+    grp["배수"] = grp["전국대비_배수"].map(lambda x: f"{x:.1f}배" if pd.notna(x) else "-")
+    grp["비고"] = grp["자료부족"].map({True: "계약이 적어 구 평균으로 추정", False: ""}).fillna("자료 없음")
+    grp["피해주택"] = grp["피해주택"].fillna(0).astype(int)
+    grp["전세계약수"] = grp["전세계약수"].fillna(0).astype(int)
+    keep = ["지역코드", "동그룹", "이름", "등급", "서울순위", "배수", "피해주택", "전세계약수", "비고", "geometry"]
+    return grp[keep]
 
 
 def main():
@@ -85,15 +125,43 @@ def main():
             sticky=False),
     ).add_to(m)
 
-    # 범례 (화면 왼쪽 아래 고정)
-    legend = """
-    <div style="position:fixed;bottom:18px;left:12px;z-index:9999;background:#fff;padding:8px 10px;
-                border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.3);font:13px sans-serif;line-height:1.6">
-      <b>전세사기 위험등급</b><br>
+    # ── 서울 동 단위 레이어 ──────────────────────────────
+    # 지도에 붙여 두되, 페이지가 열리면 아래 자바스크립트(updateDongLayer)가 바로 떼어 내고
+    # 서울을 확대했을 때만 다시 붙인다. 전국을 볼 때 동 경계까지 그리면 너무 빽빽하고 휴대폰에서 느려지기 때문이다.
+    dong = build_seoul_dong()
+    dong.to_file(OUT / "seoul_dong.geojson", driver="GeoJSON", COORDINATE_PRECISION=5)
+    dong_colors = {**COLORS, "자료없음": GRAY}
+    dong_layer = folium.GeoJson(
+        json.loads((OUT / "seoul_dong.geojson").read_text(encoding="utf-8")),
+        name="서울 동 단위",
+        style_function=lambda f: {"fillColor": dong_colors[f["properties"]["등급"]],
+                                  "color": "#ffffff", "weight": 0.8, "fillOpacity": 0.8},
+        highlight_function=lambda f: {"weight": 2.5, "color": "#222222"},
+        tooltip=folium.GeoJsonTooltip(
+            fields=["이름", "등급", "배수", "서울순위", "피해주택", "전세계약수", "비고"],
+            aliases=["동", "위험등급", "전국 평균 대비 피해율", "서울 순위", "피해주택(2023.7~2025)",
+                     "전세 계약(같은 기간)", "참고"],
+            sticky=False),
+    ).add_to(m)
+
+    # 범례 2개: 전국(시군구)용과 서울 동용. 기준이 다르니(전국 상위 % / 전국 평균의 몇 배) 따로 보여 준다.
+    box = ("position:fixed;bottom:18px;left:12px;z-index:9999;background:#fff;padding:8px 10px;"
+           "border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.3);font:13px sans-serif;line-height:1.6")
+    legend = f"""
+    <div id="legend-sgg" style="{box}">
+      <b>전세사기 위험등급 (시군구)</b><br>
       <span style="color:#D64541">■</span> 고위험 (상위 20%)<br>
       <span style="color:#F2B134">■</span> 주의 (다음 30%)<br>
       <span style="color:#3FA66B">■</span> 안전 (나머지 50%)<br>
-      <span style="font-size:11px;color:#666">'안전'은 상대적으로 위험이 낮다는 뜻입니다</span>
+      <span style="font-size:11px;color:#666">'안전'은 상대적으로 위험이 낮다는 뜻입니다<br>서울을 확대하면 동 단위로 보입니다</span>
+    </div>
+    <div id="legend-dong" style="{box};display:none">
+      <b>서울 동 단위 피해율</b><br>
+      <span style="color:#D64541">■</span> 고위험 (전국 평균의 2배 이상)<br>
+      <span style="color:#F2B134">■</span> 주의 (전국 평균의 1~2배)<br>
+      <span style="color:#3FA66B">■</span> 안전 (전국 평균보다 낮음)<br>
+      <span style="color:{GRAY}">■</span> 자료 없음<br>
+      <span style="font-size:11px;color:#666">서울 밖은 시군구 등급입니다</span>
     </div>"""
     m.get_root().html.add_child(folium.Element(legend))
 
@@ -119,6 +187,37 @@ def main():
         if (myMarker) {{ {m.get_name()}.removeLayer(myMarker); }}
         myMarker = L.marker([lat, lng]).addTo({m.get_name()}).bindPopup('내 위치').openPopup();
     }}
+
+    // 확대 수준에 따라 서울 동 레이어 켜고 끄기 (+ 범례 바꾸기)
+    var SEOUL = L.latLngBounds([37.41, 126.76], [37.72, 127.19]);
+    function updateDongLayer() {{
+        var map = {m.get_name()}, dong = {dong_layer.get_name()};
+        var show = map.getZoom() >= {DONG_ZOOM} && map.getBounds().intersects(SEOUL);
+        if (show && !map.hasLayer(dong)) dong.addTo(map);
+        if (!show && map.hasLayer(dong)) map.removeLayer(dong);
+        document.getElementById('legend-sgg').style.display = show ? 'none' : 'block';
+        document.getElementById('legend-dong').style.display = show ? 'block' : 'none';
+    }}
+    // 앱에서 동 하나로 이동: focusDong('11500', '화곡동')
+    function focusDong(code, name) {{
+        var dong = {dong_layer.get_name()}, found = null;
+        dong.getLayers().forEach(function(l) {{
+            dong.resetStyle(l);
+            var p = l.feature.properties;
+            if (p['지역코드'] === code && p['동그룹'] === name) found = l;
+        }});
+        if (!found) return false;
+        {m.get_name()}.fitBounds(found.getBounds(), {{maxZoom: 14}});
+        updateDongLayer();
+        found.setStyle({{weight: 3.5, color: '#111111'}});
+        found.bringToFront();
+        found.openTooltip();
+        return true;
+    }}
+    document.addEventListener('DOMContentLoaded', function() {{
+        {m.get_name()}.on('zoomend moveend', updateDongLayer);
+        updateDongLayer();
+    }});
     </script>"""
     m.get_root().html.add_child(folium.Element(js))
 
