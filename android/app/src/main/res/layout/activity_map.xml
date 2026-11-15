@@ -14,7 +14,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="12dp"
-        android:text="지역을 터치하면 피해 건수와 등급이 보여요"
+        android:text="지역을 터치하면 등급과 피해 건수가 보여요. 서울은 확대하면 동 단위로 보여요."
         android:textSize="14sp" />
 
     <!-- layout_height=0dp + layout_weight=1 : 남은 공간을 WebView가 전부 차지 -->

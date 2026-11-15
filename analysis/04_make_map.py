@@ -24,6 +24,7 @@
 
 import importlib
 import json
+import shutil
 from pathlib import Path
 
 import folium
@@ -195,6 +196,10 @@ def main():
         var show = map.getZoom() >= {DONG_ZOOM} && map.getBounds().intersects(SEOUL);
         if (show && !map.hasLayer(dong)) dong.addTo(map);
         if (!show && map.hasLayer(dong)) map.removeLayer(dong);
+        // 동 색 아래로 서울 시군구 색이 비쳐 보이면 색이 탁해진다(에뮬레이터에서 확인) → 동을 보일 땐 서울 시군구를 투명하게
+        _layers().forEach(function(l) {{
+            if (l.feature.properties['지역코드'].indexOf('11') === 0) l.setStyle({{fillOpacity: show ? 0 : 0.75}});
+        }});
         document.getElementById('legend-sgg').style.display = show ? 'none' : 'block';
         document.getElementById('legend-dong').style.display = show ? 'block' : 'none';
     }}
@@ -222,6 +227,13 @@ def main():
     m.get_root().html.add_child(folium.Element(js))
 
     m.save(OUT / "map.html")
+
+    # 안드로이드 앱의 assets 폴더에도 복사 → 지도를 다시 만들 때마다 앱 지도도 자동으로 최신이 된다
+    # (손으로 복사하면 잊어버려서 분석 결과와 앱 지도가 달라질 수 있다)
+    app_assets = BASE.parent / "android" / "app" / "src" / "main" / "assets"
+    if app_assets.exists():
+        shutil.copy(OUT / "map.html", app_assets / "map.html")
+        print(f"앱 지도 갱신: {app_assets / 'map.html'}")
 
     kb = lambda p: (OUT / p).stat().st_size / 1024
     print(f"경계 원본 {GEO_SRC.stat().st_size / 1024 / 1024:.1f}MB → sigungu.geojson {kb('sigungu.geojson'):,.0f}KB")

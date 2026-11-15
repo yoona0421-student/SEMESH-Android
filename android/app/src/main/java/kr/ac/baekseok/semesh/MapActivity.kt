@@ -6,7 +6,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 
-// 지도 화면: 시군구 위험등급 지도(map.html)를 WebView로 보여준다.
+// 지도 화면: 시군구 위험등급 지도(map.html)를 WebView로 보여준다. 서울은 확대하면 동 단위로 바뀐다.
 class MapActivity : AppCompatActivity() {
 
     private lateinit var webMap: WebView
@@ -29,7 +29,10 @@ class MapActivity : AppCompatActivity() {
         webSet.displayZoomControls = false   // 화면에 +/- 버튼은 숨김 (지도에 자체 버튼이 있음)
 
         // 앱 안의 assets 폴더에 있는 파일은 file:///android_asset/ 주소로 읽는다.
-        // TODO(2주차): analysis/output/map.html이 완성되면 app/src/main/assets/map.html을 그 파일로 교체
+        // map.html은 analysis/04_make_map.py를 실행하면 자동으로 이 폴더에 복사된다.
+        //  - 전국: 시군구 위험등급 / 서울을 확대하면: 동 단위 위험등급
+        //  - 지도 파일은 앱 안에 있지만, 배경 지도(OpenStreetMap)와 지도 프로그램(Leaflet)은
+        //    인터넷에서 받아 오므로 인터넷이 연결되어 있어야 보인다 (Manifest의 INTERNET 권한)
         webMap.loadUrl("file:///android_asset/map.html")
 
         btnMapBack.setOnClickListener {
