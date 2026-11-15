@@ -228,12 +228,16 @@ def main():
 
     m.save(OUT / "map.html")
 
-    # 안드로이드 앱의 assets 폴더에도 복사 → 지도를 다시 만들 때마다 앱 지도도 자동으로 최신이 된다
-    # (손으로 복사하면 잊어버려서 분석 결과와 앱 지도가 달라질 수 있다)
+    # 안드로이드 앱의 assets 폴더에도 복사 → 지도를 다시 만들 때마다 앱 지도·데이터도 자동으로 최신이 된다
+    # (손으로 복사하면 잊어버려서 분석 결과와 앱이 달라질 수 있다)
+    #  - map.html : 지도 화면(WebView)
+    #  - CSV 3개  : 앱이 처음 실행될 때 SQLite(regionTBL·dongTBL·dongAliasTBL)에 넣는다
+    #  ※ CSV 내용이 바뀌면 앱의 DBHelper.DB_VERSION을 1 올려야 휴대폰의 DB가 새로 만들어진다
     app_assets = BASE.parent / "android" / "app" / "src" / "main" / "assets"
     if app_assets.exists():
-        shutil.copy(OUT / "map.html", app_assets / "map.html")
-        print(f"앱 지도 갱신: {app_assets / 'map.html'}")
+        for name in ["map.html", "region.csv", "seoul_dong.csv", "seoul_dong_alias.csv"]:
+            shutil.copy(OUT / name, app_assets / name)
+        print(f"앱 assets 갱신: map.html + CSV 3개 → {app_assets}")
 
     kb = lambda p: (OUT / p).stat().st_size / 1024
     print(f"경계 원본 {GEO_SRC.stat().st_size / 1024 / 1024:.1f}MB → sigungu.geojson {kb('sigungu.geojson'):,.0f}KB")

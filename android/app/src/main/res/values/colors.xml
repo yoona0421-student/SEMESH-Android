@@ -2,4 +2,9 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- 위험도 카드 배경색 (지도 색과 같은 계열을 연하게) -->
+    <color name="risk_high">#FADBD8</color>  <!-- 고위험: 연한 빨강 -->
+    <color name="risk_mid">#FCEFC7</color>   <!-- 주의: 연한 노랑 -->
+    <color name="risk_low">#D5F0DE</color>   <!-- 안전: 연한 초록 -->
 </resources>

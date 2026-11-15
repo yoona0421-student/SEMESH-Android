@@ -20,8 +20,29 @@ class MapActivity : AppCompatActivity() {
         webMap = findViewById(R.id.webMap)
         btnMapBack = findViewById(R.id.btnMapBack)
 
+        // 메인 화면에서 내 위치를 찾았으면 넘어온 값 (못 찾았으면 code가 null → 전국 지도 그대로)
+        val code = intent.getStringExtra("code")
+        val dong = intent.getStringExtra("dong")
+        val lat = intent.getDoubleExtra("lat", 0.0)
+        val lng = intent.getDoubleExtra("lng", 0.0)
+
         // WebViewClient를 지정하지 않으면 링크를 눌렀을 때 외부 브라우저가 열린다 (수업 WebView 예제와 같음)
-        webMap.webViewClient = WebViewClient()
+        // onPageFinished: 지도 페이지가 다 열린 뒤에 호출된다. 그 전에 자바스크립트를 부르면 함수가 아직 없어서 실패한다.
+        webMap.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String) {
+                super.onPageFinished(view, url)
+                if (code == null) return
+                // map.html 안에 04_make_map.py가 넣어 둔 자바스크립트 함수를 Kotlin에서 호출
+                //   showMyLocation(위도, 경도) : 내 위치에 마커
+                //   focusDong('11500', '화곡동') : 서울 동으로 이동 / focusRegion('44131') : 시군구로 이동
+                view.evaluateJavascript("showMyLocation($lat, $lng);", null)
+                if (dong != null) {
+                    view.evaluateJavascript("focusDong('$code', '$dong');", null)
+                } else {
+                    view.evaluateJavascript("focusRegion('$code');", null)
+                }
+            }
+        }
 
         val webSet = webMap.settings
         webSet.javaScriptEnabled = true      // Folium 지도는 자바스크립트(Leaflet)로 그려지므로 꼭 켜야 함

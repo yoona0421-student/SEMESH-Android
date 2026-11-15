@@ -151,7 +151,9 @@ def load_contracts(gu_codes):
     r = r[r["지역코드"].isin(gu_codes) & (r["월세"] == 0)]
     r["시군구"] = r["지역코드"].map(gu_codes)
     r["동그룹"] = [to_group(g, l) for g, l in zip(r["시군구"], r["법정동"])]
-    return r.groupby(["지역코드", "시군구", "동그룹"]).size().rename("전세계약수").reset_index()
+    # 앱에서 GPS 주소(법정동, 예: '성수동1가')를 동 그룹('성수동')으로 바꿀 때 쓸 대응표도 함께 만든다
+    alias = r[["지역코드", "법정동", "동그룹"]].drop_duplicates().rename(columns={"법정동": "이름"})
+    return r.groupby(["지역코드", "시군구", "동그룹"]).size().rename("전세계약수").reset_index(), alias
 
 
 if __name__ == "__main__":
@@ -161,7 +163,7 @@ if __name__ == "__main__":
     national = region["피해주택_누적"].sum() / region["전세계약수"].sum() * 1000
 
     dmg = load_damage()
-    con = load_contracts(gu_codes)
+    con, alias_leg = load_contracts(gu_codes)
 
     # ── 확인 1: 대응표로 묶은 동 그룹이 전월세 데이터에 모두 있나? ──────────────
     groups = dmg.groupby(["시군구", "동그룹"], as_index=False).agg(
@@ -233,4 +235,13 @@ if __name__ == "__main__":
     app = df[["지역코드", "시군구", "동그룹", "포함_행정동", "등급", "서울순위", "피해주택",
               "전세계약수", "피해율_보정", "전국대비_배수", "자료부족"]].round(3)
     app.to_csv(OUT_APP, index=False, encoding="utf-8-sig")
-    print(f"\n저장 완료: seoul_dong_risk.csv, output/seoul_dong.csv ({len(app)}개 동 그룹)")
+
+    # 이름 → 동 그룹 대응표 (앱의 GPS 주소 → 동 그룹 찾기용)
+    # 법정동 이름(국토부) + 행정동 이름(HUG) + 동 그룹 이름 자신을 모두 넣어 두면, 주소가 어느 형식으로 와도 찾을 수 있다
+    code_of = {v: k for k, v in gu_codes.items()}
+    alias_adm = pd.DataFrame({"지역코드": dmg["시군구"].map(code_of), "이름": dmg["읍면동"], "동그룹": dmg["동그룹"]})
+    alias_self = pd.DataFrame({"지역코드": df["지역코드"], "이름": df["동그룹"], "동그룹": df["동그룹"]})
+    alias = pd.concat([alias_leg, alias_adm, alias_self]).drop_duplicates(["지역코드", "이름"])
+    alias.to_csv(BASE / "output" / "seoul_dong_alias.csv", index=False, encoding="utf-8-sig")
+    print(f"\n저장 완료: seoul_dong_risk.csv, output/seoul_dong.csv ({len(app)}개 동 그룹), "
+          f"output/seoul_dong_alias.csv ({len(alias)}개 이름)")
